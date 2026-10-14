@@ -52,6 +52,67 @@ python3 scripts/url/add_missing_distributions.py [--apply]
 work against the database as is; the older scripts query an unqualified `records` and need `search_path = validate`
 (details: `scripts/README.md`).
 
+## Scripts at a glance
+
+"Writes DB" = changes the database (only with `--apply`, dry run otherwise). All others are read-only.
+
+### `crosscheck/` — phase 1, title/abstract backfill from the Solr export and upstream sources
+
+| Script | Main goal | Writes DB |
+| :-- | :-- | :-: |
+| `check_untitled.py` | Find records titled `Untitled`/blank and report the title the Solr export has for the same identifier | no |
+| `check_missing.py` | Same cross-check for any missing/placeholder column (default `abstract`), with a title-agreement guard | no |
+| `apply_titles.py` | Write the recovered titles back (only NULL / empty / `Untitled` rows) | yes |
+| `apply_field.py` | Write recovered values for any column back from the Solr export | yes |
+| `fetch_sources.py` | Look up each record's upstream source page by identifier and propose an abstract | no |
+| `apply_abstracts.py` | Write the verified source abstracts, skipping the exclusion list (Copernicus review threads, site taglines) | yes |
+
+### `scripts/cleanup/` — messy-text cleanup (emoji, pipes, HTML tags, mojibake, …)
+
+| Script | Main goal | Writes DB |
+| :-- | :-- | :-: |
+| `cleanup_rules.py` | Shared detection + cleaning rules (single source of truth for scan and dry run) | no |
+| `find_messy.py` | Scan free-text fields and flag records with messy text | no |
+| `dry_run.py` | Apply the rules in memory and emit a reviewable before/after diff CSV | no |
+| `analyse_diff.py` | Classify every change in the diff by type (html_tag, multi_space, mojibake, …) | no |
+| `verify_diff.py` | Check the diff for residual issues or newly introduced damage before sign-off | no |
+| `apply_cleanup.py` | Apply the signed-off diff (before-image backup, row-count assert, rollback on mismatch) | yes |
+
+### `scripts/abstracts/` — empty abstracts
+
+| Script | Main goal | Writes DB |
+| :-- | :-- | :-: |
+| `fill_abstract_from_title.py` | Fill empty/NULL/placeholder `abstract` from `title` (top-level column only); `--restore` undoes it | yes |
+
+### `scripts/url/` — `records.url`, URL checks, `distributions`
+
+| Script | Main goal | Writes DB |
+| :-- | :-- | :-: |
+| `url_rules.py` | Identifier → URL rules (DOI, URL, arXiv, handle, URN, …), shared by the other URL scripts | no |
+| `test_url_rules.py` | Plain-assert tests for `url_rules.py` | no |
+| `build_url_column.py` | Add and fill the `records.url` column from identifiers (plus verified external candidates) | yes |
+| `find_urls_external.py` | Find URLs for records the rules cannot resolve (OpenAIRE title+year, page links containing the title) | no |
+| `check_urls.py` | HTTP-check every URL (cached, resumable) and write a report | no |
+| `check_urls_source.py` | Copy of `check_urls.py` with different output names for the source-catalogue pass | no |
+| `url_check_ui.py` | Run the URL check with a small local web UI | no |
+| `apply_source_urls.py` | Fill still-empty `url` from the source-catalogue check results (high-confidence methods only) | yes |
+| `fix_source_urls_unescape.py` | Repair `&amp;` left in the URLs written by the step above | yes |
+| `add_source_distributions.py` | Add a `distributions` row for each source-pass URL | yes |
+| `add_missing_distributions.py` | Add a `distributions` row for every `records.url` that has none | yes |
+| `compare_url_accessurl.py` | Compare `records.url` with `distributions.access_url` and report differences | no |
+
+### `scripts/diagnostics/` — one-off inspectors, kept for reproducibility
+
+| Script | Main goal | Writes DB |
+| :-- | :-- | :-: |
+| `db_check.py` | Show the `records` schema and row count | no |
+| `db_check2.py` | Pretty-print one `raw_metadata` document | no |
+| `inspect_types.py` | Show the type of each cleaning-relevant `raw_metadata` key | no |
+| `test_parse.py` | Check whether `view_*` values parse as JSON | no |
+| `inspect_singles.py` | Find literal `\xNN` escapes and control characters | no |
+| `inspect_backslash.py` | Classify backslashes (`\xNN` vs LaTeX-like vs other) | no |
+| `sample_issues.py` | Print real samples per (field, issue) before writing a rule | no |
+
 ## Current state (2026-10-08)
 
 | | |
